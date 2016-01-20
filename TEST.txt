@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-TEST TEAM16
-=======
 adrian test
-TEST
->>>>>>> origin/master
+TEST TEAM16
+
