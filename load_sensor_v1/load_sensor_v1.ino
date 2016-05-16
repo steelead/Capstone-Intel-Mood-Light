@@ -4,10 +4,14 @@ int val1 = 0;
 int val = 0;           // variable to store the value read
 int val2 = 0;
 
+#define PERSON 8
+
+
 
 void setup()
 {
   Serial.begin(9600);          //  setup serial
+  pinMode(PERSON, INPUT);
 }
 
 
@@ -15,23 +19,21 @@ void setup()
 void loop()
 
 {
-  val1 = analogRead(analogPin);    // read the input pin
-  if(val1 > 700)
+  if(digitalRead(PERSON) == HIGH)
   {
+    Serial.print("HIGH ");
+    val1 = analogRead(analogPin);
     val2 = val1;
-    Serial.print(val1);
-    Serial.print(" ");
   }
-
   else
   {
-    val = analogRead(analogPin);
-    val2 = val;
-    Serial.print(val);
-    Serial.print(" ");
+    Serial.print("LOW ");
+    val2 = analogRead(analogPin);
   }
-  
-  Serial.print((val2-val)*1.13);             // debug value
+
+  Serial.print(val2);
+  Serial.print(' ');
+  Serial.print((val2-val1)*1.163);             // debug value
   Serial.print(" lbs\n");
   delay(250);
 }

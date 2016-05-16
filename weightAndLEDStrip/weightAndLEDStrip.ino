@@ -12,7 +12,7 @@ int read2 = 0;
 int read3 = 0;
 int read4 = 0;
 int lastVal = 0;
-
+#define MULTIPLIER 2.43
 
 
 void setup()
@@ -36,13 +36,14 @@ void loop()
     Serial.print("HIGH ");
     val1 = analogRead(analogPin);
     val2 = val1;
+    delay(1000);
   }
   else
   {
     Serial.print("LOW ");
-    delay(2000);
+    delay(1000);
     val2 = analogRead(analogPin);
-    lastVal = (val2-val1)*1.163;
+    lastVal = (val2-val1)*MULTIPLIER;
   }
 
   if (lastVal < 170 && lastVal > 130)
@@ -60,14 +61,14 @@ void loop()
   else
   {
     analogWrite(REDPIN, 0);
-    analogWrite(GREENPIN, 255);
-    analogWrite(BLUEPIN, 0);
+    analogWrite(GREENPIN, 0);
+    analogWrite(BLUEPIN, 255);
   }
 
   Serial.print(lastVal);
   Serial.print(' ');
   Serial.print(val2);
   Serial.print(' ');
-  Serial.print((val2-val1)*1.163);             // debug value
+  Serial.print((val2-val1)*MULTIPLIER);             // debug value
   Serial.print(" lbs\n");
 }

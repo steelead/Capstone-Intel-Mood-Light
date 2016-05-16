@@ -33,7 +33,7 @@ void loop()
 
   Serial.print(val2);
   Serial.print(' ');
-  Serial.print((val2-val1)*1.163);             // debug value
+  Serial.print((val2-val1)*2.43);             // debug value
   Serial.print(" lbs\n");
   delay(250);
 }
