@@ -1,7 +1,7 @@
 void setup() {
   // put your setup code here, to run once:
-  char *str = "Mader faker gentalman";
-  char search = 'a';
+  char *str = "Mother Father Gentleman";
+  char search = 'e';
 
   char *index;
 
@@ -20,7 +20,14 @@ void setup() {
     Serial.println(index-str+1);
     index = strchr(index+1,(int)search);
   }
-  
+
+  String mystr = "Ahhhh I'm Tilting!";
+  char myarray[50];
+  mystr.toCharArray(myarray, 50);
+  Serial.print("string = ");
+  Serial.println(mystr);
+  Serial.print("char array = ");
+  Serial.println(myarray);
 
 }
 
