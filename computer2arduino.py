@@ -25,6 +25,9 @@ import time
 
 
 def main():
+    """
+        Main function, user should specify the COM port that the arduino is connected on when they begin the program.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('comPort', action='store', help="The serial com port that the arduino is connected to")
     args = parser.parse_args()
@@ -39,11 +42,6 @@ def main():
         print "Could not connect to bluetooth module"
         sys.exit()
 
-    #open second thread to read back information from the arduino
-    thread = threading.Thread(target=readMySerial, args=(ser,))
-    thread.daemon = True
-    thread.start()
-        
     #get command from user and send to arduino over serial connection
     while True:
         print "Main Menu"
@@ -51,37 +49,31 @@ def main():
         print "2) Edit existing profile"
         print "3) Remove profile"
         print "4) Quit"
-        cmd = int(input("Enter the number of the command to execute: "))
+        cmd = int(raw_input("Enter the number of the command to execute: "))
 
         if cmd == 1:
-            addProfile()
+            addProfile(ser)
+            
+        elif cmd == 2:
+            editProfile(ser)
 
+        elif cmd == 3:
+            removeProfile(ser)
+            
+        elif cmd == 4:
+            break
 
-
-
-    while True:
-        c = raw_input("")
-        c = c + '!'
-        ser.write(c)
-
-#read data from arduino
-def readMySerial(ser):
-    while True:
-        text = ser.readline()
-        if text != "":
-            print text
-
-
+            
+            
 def addProfile(ser):
     """
         Add a new profile to the arduino
-
         Args:
           - ser: serial connection object to the arduino
-
         Returns:
+            None
     """
-    name = input("Enter the profile name: ")
+    username = raw_input("Enter the profile name: ")
     print "Color options:"
     print "1) Green"
     print "2) Red"
@@ -90,25 +82,22 @@ def addProfile(ser):
     print "5) White"
     print "6) Purple"
     print "7) Orange"
-    color = input("Enter the number of the color to set for the profile: ")
+    color = int(raw_input("Enter the number of the color to set for the profile: "))
     print "Step on the scale to calibrate the user's weight."
     
     ser.write("menu=1,")
-    ser.write("name=" + name + ",")
+    ser.write("name=" + username + ",")
     ser.write("color=" + color + ",")
     ser.write("weight=1")
     
     resp = ser.readline()
-    
+    print "Weight calibrated to: %d" % resp.split('=')[1]
 
 def getProfiles(ser):
-{
     """
         Gets a list of profiles currently stored in the Arduino
-        
         Args:
           - ser: serial connection object to the arduino
-        
         Returns:
             A tuple containing:
             - Integer representing number of profiles
@@ -145,10 +134,8 @@ def getProfiles(ser):
 def mapVal2Color(colorInt):
     """
         Maps an integer to a color
-        
         Args:
           - colorInt: the integer value of the color to map
-          
         Returns:
             returns a string of the mapped color value
     """
@@ -162,6 +149,138 @@ def mapVal2Color(colorInt):
                 }
     return colorDict[colorInt]
     
+    
+def editProfiles(ser):
+    """
+        Edit an existing profile on the arduino
+        Args:
+          - ser: serial connection object to the arduino
+        Returns:
+            None
+    """
+    (numProfiles, profiles) = getProfiles(ser)
+    
+    if numProfiles == 0:
+        print "No existing profiles found on the Arduino.\n"
+        return
+        
+    print "There are currently %d profiles stored on the Arduino." % numProfiles
+    
+    for i in range(0, len(profiles)-1):
+        print "Profile %d" % (i+1)
+        print "    User: %s" % profiles[i].user
+        print "    Weight: %d" % profiles[i].weight
+        print "    Color: %s\n" % profiles[i].color
+        
+    editIndex = int(raw_input("Enter the number of the profile you want to make edits to: ")) - 1
+    
+    if editIndex < 0 or editIndex >= len(profiles):
+        print "Error: Specified profile number out of range."
+        return
+        
+    print "Profile %d" % (editIndex+1)
+    print "    1) User: %s" % profiles[editIndex].user
+    print "    2) Weight: %d" % profiles[editIndex].weight
+    print "    3) Color: %s\n" % profiles[editIndex].color
+    item = int(raw_input("Enter the number of the item you want to modify: "))
+    
+    if item < 1 or item > 3:
+        print "Error: specified item to edit out of range (1-3)"
+        return
+    
+    if item == 1:
+        username = raw_input("Enter the profile name: ")
+        ser.write("menu=3,")
+        ser.write("profile=" + editIndex + ",");
+        ser.write("name=" + username + ",")
+        
+    elif item == 2:
+        print "Color options:"
+        print "1) Green"
+        print "2) Red"
+        print "3) Blue"
+        print "4) Yellow"
+        print "5) White"
+        print "6) Purple"
+        print "7) Orange"
+        color = int(raw_input("Enter the number of the color to set for the profile: "))
+        
+        if color < 1 or color > 7:
+            print "Error: specified color out of range (1-7)."
+            return
 
+        ser.write("menu=3,")
+        ser.write("profile=" + editIndex + ",")
+        ser.write("color=" + color + ",")
+
+    elif item == 3:
+        ser.write("menu=3,")
+        ser.write("profile=" + editIndex + ",")
+        ser.write("weight=1,");
+        print "Step on the scale to calibrate the user's weight."
+        resp = ser.readline()
+        print "Weight calibrated to: %d" % resp.split('=')[1]
+
+        
+        
+def removeProfile(ser)
+    """
+        Remove a profile from the arduino
+        Args:
+          - ser: serial connection object to the arduino
+        Return:
+            None
+    """
+    (numProfiles, profiles) = getProfiles(ser)
+    
+    if numProfiles == 0:
+        print "No existing profiles found on the Arduino.\n"
+        return
+        
+    for i in range(0, len(profiles)-1):
+        print "Profile %d" % (i+1)
+        print "    User: %s" % profiles[i].user
+        print "    Weight: %d" % profiles[i].weight
+        print "    Color: %s\n" % profiles[i].color
+        
+    removeIndex = int(raw_input("Enter the number of the profile you want to remove: ")) - 1
+    
+    if removeIndex < 0 or removeIndex >= len(profiles):
+        print "Error: Specified profile number out of range."
+        return
+    
+    ser.write("menu=4,")
+    ser.write("profile=" + removeIndex + ",")
+    
+    
+    
+    
 if __name__ == '__main__':
     main()
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
