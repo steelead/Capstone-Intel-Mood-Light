@@ -1,3 +1,18 @@
+/*
+ * PSU Capstone Intel Mood Light 2015-2016
+ * This program runs on the Arduino to control the LED strip and get input from a scale to identify users, 
+ * and input over bluetooth to add, modify and remove user profiles.
+ * 
+ * Adrian Steele (steelead@pdx.edu)
+ * Bander Alenzi (alenezi@pdx.edu)
+ * Dusan Micic (dmicic@pdx.edu)
+ * Waleed Alhaddad (alhad@pdx.edu)
+ * 
+ * Dependencies:
+ * arduino LinkedList library
+ * arduino DueFlashStorage library
+ */
+
 #include <LinkedList.h>
 #include <DueFlashStorage.h>
 DueFlashStorage dueFlashStorage;
@@ -5,6 +20,7 @@ DueFlashStorage dueFlashStorage;
 
 //1 to print debug statements to Serial (serial monitor), 0 to turn off
 #define DEBUG 1
+#define DEBUG_WEIGHT 0
 
 #ifdef DEBUG
   #define DEBUG_PRINT(x)  Serial.print(x)
@@ -12,46 +28,55 @@ DueFlashStorage dueFlashStorage;
   #define DEBUG_PRINT(x)
 #endif
 
-#define SCALE_ANALOG_PIN 0     // potentiometer wiper (middle terminal) connected to analog pin 3
-                       // outside leads to ground and +5V
-#define REDPIN 9
-#define GREENPIN 10
-#define BLUEPIN 11 
-#define PERSON 8
-#define MULTIPLIER 2.43
-#define MAXUSERLEN 50
-#define NUMSAMPLES 500
-#define CALIBRATE_WEIGHT_LED_PIN 13
+#ifdef DEBUG_WEIGHT
+  #define DEBUG_DELAY(x) delay(x)
+#else
+  #define DEBUG_DELAY(x)
+#endif
 
-int weightSample[NUMSAMPLES];
+#define SCALE_ANALOG_PIN 0               //analog pin on the arduino to get weight readings from
+#define REDPIN 9                         //LED strip digital output pin for red color settings
+#define GREENPIN 10                      //LED strip digital output pin for green color settings
+#define BLUEPIN 11                       //LED strip digital output pin for blue color settings
+#define PERSON 8                         //digital input pin for button to tell if there is a person on the scale
+#define MULTIPLIER 2.43                  //scale analog input multiplier to convert to lbs (based on the resolution of the scale)
+#define MAXUSERLEN 50                    //maximum characters allowed for user profile names
+#define NUMSAMPLES 500                   //number of weight samples to take for checking the weight of the person on the scale
+#define CALIBRATE_WEIGHT_LED_PIN 13      //LED pin output of the LED attached to the scale to tell when the weight has been accuratly calculated
+#define RANGE 20                         //acceptable range between readings of the weight (because scale is not perfectly accurate each reading)
+
+float weightSample[NUMSAMPLES];     //array of samples to average when calculating the weight of the person stepping on the scale
 int i;
-int lastVal = 0;
-int baseVal;
-String input = "";
-int currentMenu = 1;
-int range = 5;
-int storeWeight = 0;
-int editProfileIndex = 0;
+int lastVal = 0;                    //weight of the last person who stepped on the scale
+int baseVal;                        //base weight scale anlaog reading when there is nobody on the scale
+String input = "";                  //holds input from messages sent to us over bluetooth
+int currentMenu = 1;                //holds what menu the user interface program is in (to determine what actions to perform)
+int storeWeight = 0;                //whether to store the weight as a new profile or set the room lighting
+int editProfileIndex = 0;           //index of the profile to edit
 
+
+
+//structure for containing user profile info
 struct Database
 {
   char user[MAXUSERLEN];
   int weight;
   int color;
 };
-
 typedef struct Database database;
 
-LinkedList<database*> profiles = LinkedList<database*>();
-database *newProfile;
-int numProfiles;
+LinkedList<database*> profiles = LinkedList<database*>();     //linked list holding all the user profiles
+database *newProfile;                                         //pointer to a new profile
+int numProfiles;                                              //number of profiles we have stored
 
 
+//runs once then transitions to loop()
 void setup()
 {
   //setup listening on Bluetooth connection (to modify profile info from computer script)
   Serial3.begin(9600);
-  
+
+  //setup debug printing to serial monitor
   #ifdef DEBUG
     Serial.begin(9600);
   #endif
@@ -64,14 +89,16 @@ void setup()
   pinMode(BLUEPIN, OUTPUT);
   pinMode(CALIBRATE_WEIGHT_LED_PIN, OUTPUT);
 
-  //test LED strip by turning white for half a second
+  //test LED strip and weight calibration LED
   analogWrite(REDPIN, 255);
   analogWrite(GREENPIN, 255);
   analogWrite(BLUEPIN, 255);
+  digitalWrite(CALIBRATE_WEIGHT_LED_PIN, HIGH);
   delay(500);
   analogWrite(REDPIN, 0);
   analogWrite(GREENPIN, 0);
   analogWrite(BLUEPIN, 0);
+  digitalWrite(CALIBRATE_WEIGHT_LED_PIN, LOW);
 
   //get user profiles from flash memory
   //check if we have written to the flash before
@@ -115,7 +142,7 @@ void setup()
 }
 
 
-
+//this code wil loop infinitely
 void loop()
 {
   //Get input from computer (over bluetooth)
@@ -248,7 +275,6 @@ void loop()
   {
     int redo = 1;
     int error = 0;
-    float average;
     float weightSum;
 
     DEBUG_PRINT("Someone is on the scale.\nSetting led pin on DUE high.\nCalibrating weight.\n");
@@ -261,16 +287,24 @@ void loop()
       redo = 0;
       for(i = 0; i < NUMSAMPLES; ++i)
       {
+        delay(2);
         weightSample[i] = analogRead(SCALE_ANALOG_PIN);     //get sample
         weightSample[i] = (weightSample[i] - baseVal) * 2.43;     //convert weight to pounds
         
         weightSum += weightSample[i];
         
         //check if sample is outside of acceptable range
-        if ((((weightSum / (i+1)) + range) < weightSample[i]) || 
-            (((weightSum / (i+1)) - range) > weightSample[i]))
+        if ((((weightSum / (i+1)) + RANGE) < weightSample[i]) || 
+            (((weightSum / (i+1)) - RANGE) > weightSample[i]))
         {
           redo = 1;
+          DEBUG_PRINT("first check\n");
+          DEBUG_PRINT("average weight = ");
+          DEBUG_PRINT(weightSum/(i+1));
+          DEBUG_PRINT("\nOut of range sample = ");
+          DEBUG_PRINT(weightSample[i]);
+          DEBUG_PRINT("\n");
+          DEBUG_DELAY(1000);
           break;
         }
 
@@ -293,9 +327,16 @@ void loop()
       {
         for(i = 0; i < NUMSAMPLES; ++i)
         {
-          if ((((weightSum / NUMSAMPLES) + range) < weightSample[i]) ||
-              (((weightSum / NUMSAMPLES) - range) > weightSample[i]))
+          if ((((weightSum / NUMSAMPLES) + RANGE) < weightSample[i]) ||
+              (((weightSum / NUMSAMPLES) - RANGE) > weightSample[i]))
               redo = 1;
+              DEBUG_PRINT("second check\n");
+              DEBUG_PRINT("average weight = ");
+              DEBUG_PRINT(weightSum/(NUMSAMPLES));
+              DEBUG_PRINT("\nOut of range sample = ");
+              DEBUG_PRINT(weightSample[i]);
+              DEBUG_PRINT("\n");
+              DEBUG_DELAY(1000);
               break;
         }
       }
@@ -316,7 +357,7 @@ void loop()
     }
     
     //compare lastVal to profiles
-    if(storeWeight == 0)
+    if(storeWeight == 0 && error != 1)
     {
       DEBUG_PRINT("Comparing weight to profiles.\n");
       int userWeight = 0;
@@ -342,7 +383,7 @@ void loop()
     }
 
     //store weight into new profile
-    else if(storeWeight == 1 && currentMenu == 1)
+    else if(storeWeight == 1 && currentMenu == 1 && error != 1)
     {
       DEBUG_PRINT("Storing weight as a new profile.\n");
       newProfile->weight = int(lastVal);
@@ -426,7 +467,7 @@ void setLEDStrip(int color)
   //off
   if(color == 0)
   {
-    DEBUG_PRINT("Setting LED strip off");
+    DEBUG_PRINT("Setting LED strip off\n");
     r = 0;
     g = 0;
     b = 0;
@@ -435,7 +476,7 @@ void setLEDStrip(int color)
   //green
   else if(color == 1)
   {
-    DEBUG_PRINT("Setting LED strip to green");
+    DEBUG_PRINT("Setting LED strip to green\n");
     r = 0;
     g = 255;
     b = 0;
@@ -444,7 +485,7 @@ void setLEDStrip(int color)
   //red
   else if(color == 2)
   {
-    DEBUG_PRINT("Setting LED strip to red");
+    DEBUG_PRINT("Setting LED strip to red\n");
     r = 255;
     g = 0;
     b = 0;
@@ -453,7 +494,7 @@ void setLEDStrip(int color)
   //blue
   else if(color == 3)
   {
-    DEBUG_PRINT("Setting LED strip to blue");
+    DEBUG_PRINT("Setting LED strip to blue\n");
     r = 0;
     g = 0;
     b = 255;
@@ -462,7 +503,7 @@ void setLEDStrip(int color)
   //yellow
   else if(color == 4)
   {
-    DEBUG_PRINT("Setting LED strip to yellow");
+    DEBUG_PRINT("Setting LED strip to yellow\n");
     r = 255;
     g = 255;
     b = 0;
@@ -471,7 +512,7 @@ void setLEDStrip(int color)
   //white
   else if(color == 5)
   {
-    DEBUG_PRINT("Setting LED strip to white");
+    DEBUG_PRINT("Setting LED strip to white\n");
     r = 255;
     g = 255;
     b = 255;
@@ -480,7 +521,7 @@ void setLEDStrip(int color)
   //purple
   else if(color == 6)
   {
-    DEBUG_PRINT("Setting LED strip to purple");
+    DEBUG_PRINT("Setting LED strip to purple\n");
     r = 238;
     g = 130;
     b = 238;
@@ -489,7 +530,7 @@ void setLEDStrip(int color)
   //orange
   else if(color == 7)
   {
-    DEBUG_PRINT("Setting LED strip to orange");
+    DEBUG_PRINT("Setting LED strip to orange\n");
     r = 255;
     g = 165;
     b = 0;

@@ -87,11 +87,19 @@ def addProfile(ser):
     
     ser.write("menu=1,")
     ser.write("name=" + username + ",")
-    ser.write("color=" + color + ",")
-    ser.write("weight=1")
+    ser.write("color=" + str(color) + ",")
+    ser.write("weight=1,")
     
-    resp = ser.readline()
-    print "Weight calibrated to: %d" % resp.split('=')[1]
+    while True:
+        resp = ser.readline()
+        if resp != '':
+            break
+
+    try:
+        print "Weight calibrated to: %d" % int(resp.split('=')[1].strip())
+    except IndexError:
+        print "Bluetooth communication error with Arduino, please try again.\n"
+        
 
 def getProfiles(ser):
     """
@@ -104,28 +112,41 @@ def getProfiles(ser):
             - List object containing dictionaries of the profiles
     """
     ser.write("menu=2,")
-    line = ser.readline()
-    # first thing returned from arduino should be the number of profiles it has
-    numProfiles = int(line.split('=')[1].strip())
+    while True:
+        line = ser.readline()
+        if line != '':
+            break
     
+    try:
+        # first thing returned from arduino should be the number of profiles it has
+        numProfiles = int(line.split('=')[1].strip())
+    except IndexError:
+        print "Bluetooth communication error with Arduino, please try again.\n"
+        return (0, [])
+        
     profiles = []
     
     for i in range(0, numProfiles):
         # each profile will be read in in one line (ending with a newline)
         line = ser.readline()
         
-        # each item in the profile will be separated by a comma
-        for item in line.split(','):
-            #key value pair will be separated by an '='
-            if "user=" in item:
-                user = item.split('=')[1].strip()
-            elif "weight=" in item:
-                weight = int(item.split('=')[1].strip())
-            elif "color=" in item:
-                color = int(item.split('=')[1].strip())
-                
-        newProfile = {"user": user, "weight": weight, "color": mapVal2Color(color)}
-        profiles.append(newProfile)
+        try:
+            # each item in the profile will be separated by a comma
+            for item in line.split(','):
+                #key value pair will be separated by an '='
+                if "user=" in item:
+                    user = item.split('=')[1].strip()
+                elif "weight=" in item:
+                    weight = int(item.split('=')[1].strip())
+                elif "color=" in item:
+                    color = int(item.split('=')[1].strip())
+                    
+            newProfile = {"user": user, "weight": weight, "color": mapVal2Color(color)}
+            profiles.append(newProfile)
+            
+        except IndexError:
+            print "Bluetooth communication error with Arduino, please try again.\n"
+            return (0, [])
         
     return (numProfiles, profiles)
         
@@ -150,7 +171,7 @@ def mapVal2Color(colorInt):
     return colorDict[colorInt]
     
     
-def editProfiles(ser):
+def editProfile(ser):
     """
         Edit an existing profile on the arduino
         Args:
@@ -166,11 +187,11 @@ def editProfiles(ser):
         
     print "There are currently %d profiles stored on the Arduino." % numProfiles
     
-    for i in range(0, len(profiles)-1):
+    for i in range(0, len(profiles)):
         print "Profile %d" % (i+1)
-        print "    User: %s" % profiles[i].user
-        print "    Weight: %d" % profiles[i].weight
-        print "    Color: %s\n" % profiles[i].color
+        print "    User: %s" % profiles[i]["user"]
+        print "    Weight: %d" % profiles[i]["weight"]
+        print "    Color: %s\n" % profiles[i]["color"]
         
     editIndex = int(raw_input("Enter the number of the profile you want to make edits to: ")) - 1
     
@@ -179,9 +200,9 @@ def editProfiles(ser):
         return
         
     print "Profile %d" % (editIndex+1)
-    print "    1) User: %s" % profiles[editIndex].user
-    print "    2) Weight: %d" % profiles[editIndex].weight
-    print "    3) Color: %s\n" % profiles[editIndex].color
+    print "    1) User: %s" % profiles[editIndex]["user"]
+    print "    2) Color: %s" % profiles[editIndex]["color"]
+    print "    3) Weight: %d\n" % profiles[editIndex]["weight"]
     item = int(raw_input("Enter the number of the item you want to modify: "))
     
     if item < 1 or item > 3:
@@ -191,7 +212,7 @@ def editProfiles(ser):
     if item == 1:
         username = raw_input("Enter the profile name: ")
         ser.write("menu=3,")
-        ser.write("profile=" + editIndex + ",");
+        ser.write("profile=" + str(editIndex) + ",");
         ser.write("name=" + username + ",")
         
     elif item == 2:
@@ -210,20 +231,25 @@ def editProfiles(ser):
             return
 
         ser.write("menu=3,")
-        ser.write("profile=" + editIndex + ",")
-        ser.write("color=" + color + ",")
+        ser.write("profile=" + str(editIndex) + ",")
+        ser.write("color=" + str(color) + ",")
 
     elif item == 3:
         ser.write("menu=3,")
-        ser.write("profile=" + editIndex + ",")
+        ser.write("profile=" + str(editIndex) + ",")
         ser.write("weight=1,");
         print "Step on the scale to calibrate the user's weight."
         resp = ser.readline()
-        print "Weight calibrated to: %d" % resp.split('=')[1]
+        while True:
+            resp = ser.readline()
+            if resp != '':
+                break
+        print [resp]
+        print "Weight calibrated to: %d" % int(resp.split('=')[1].strip())
 
         
         
-def removeProfile(ser)
+def removeProfile(ser):
     """
         Remove a profile from the arduino
         Args:
@@ -237,11 +263,11 @@ def removeProfile(ser)
         print "No existing profiles found on the Arduino.\n"
         return
         
-    for i in range(0, len(profiles)-1):
+    for i in range(0, len(profiles)):
         print "Profile %d" % (i+1)
-        print "    User: %s" % profiles[i].user
-        print "    Weight: %d" % profiles[i].weight
-        print "    Color: %s\n" % profiles[i].color
+        print "    User: %s" % profiles[i]["user"]
+        print "    Weight: %d" % profiles[i]["weight"]
+        print "    Color: %s\n" % profiles[i]["color"]
         
     removeIndex = int(raw_input("Enter the number of the profile you want to remove: ")) - 1
     
@@ -250,37 +276,11 @@ def removeProfile(ser)
         return
     
     ser.write("menu=4,")
-    ser.write("profile=" + removeIndex + ",")
+    ser.write("profile=" + str(removeIndex) + ",")
     
     
     
     
 if __name__ == '__main__':
     main()
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     
